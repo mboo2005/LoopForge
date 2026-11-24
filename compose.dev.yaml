@@ -10,5 +10,9 @@ services:
         LOOPFORGE_BUILD_JOBS: ${LOOPFORGE_BUILD_JOBS:-}
         LOOPFORGE_COMMIT: ${LOOPFORGE_COMMIT:-}
         CODEBUDDY_PACKAGE: ${CODEBUDDY_PACKAGE-@tencent-ai/codebuddy-code@2.167.0}
+        # Build-time module/package mirrors. Set GOPROXY in .env when
+        # proxy.golang.org is unreachable (for example https://goproxy.cn,direct).
+        GOPROXY: ${GOPROXY:-}
+        NPM_REGISTRY: ${NPM_REGISTRY:-}
     environment:
       AGENTFLOW_ISOLATED_IMAGE: loopforge-platform:local
