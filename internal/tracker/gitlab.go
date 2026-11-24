@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strconv"
 	"strings"
@@ -49,12 +50,26 @@ func gitlabProjectParts(id string) (host, projectPath string, ok bool) {
 	return host, projectPath, true
 }
 
+// gitlabHostLookup 从平台的「Git 主机信任」表读取已授权地址。repo.Store 同时
+// 实现 ProjectAuthStore 与该接口；未装配时返回 nil，由 gitegress 退回公网 /
+// AGENTFLOW_GIT_EGRESS_ALLOW_CIDRS 策略判定。
+// --- @ty.aicoding@1795521395000 ---
+func (s *Service) gitlabHostLookup() gitegress.HTTPSHostLookup {
+	store, ok := s.projectAuth.(interface {
+		PlatformGitHTTPSAddresses(context.Context, string) ([]netip.Addr, error)
+	})
+	if !ok {
+		return nil
+	}
+	return store.PlatformGitHTTPSAddresses
+}
+
 // gitlabClient 按仓库绑定记录解析项目 Owner 的每主机 Git 凭据并构造客户端。
 // 凭据只发往管理员显式声明的实例（AGENTFLOW_GITLAB_ALLOWED_HOSTS）：成员只要
 // 能写 POST /api/repositories 就能绑定任意 gitlab:<host>，若按"前缀即可信"
 // 放行，Owner 的 Git 令牌会被当 PRIVATE-TOKEN 发到攻击者主机。未声明则直接
 // 拒绝构造客户端，不携带任何凭据。
-// --- @ty.aicoding@1795418765976 ---
+// --- @ty.aicoding@1795521395000 ---
 func (s *Service) gitlabClient(project string) (*gitlabClient, error) {
 	host, projectPath, ok := gitlabProjectParts(project)
 	if !ok {
@@ -89,7 +104,7 @@ func (s *Service) gitlabClient(project string) (*gitlabClient, error) {
 	// gitegress 客户端自带出网地址策略与"不跟随重定向"；测试注入
 	// gitHostAPIBase 时只替换目标地址，保留重定向拒绝语义，避免
 	// PRIVATE-TOKEN 在 302 场景被带到别的 origin。
-	client := gitegress.Client()
+	client := gitegress.Client(s.gitlabHostLookup())
 	if s.gitHostAPIBase != "" {
 		base = s.gitHostAPIBase
 		client = &http.Client{Timeout: 30 * time.Second, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
