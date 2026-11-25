@@ -14,5 +14,10 @@ services:
         # proxy.golang.org is unreachable (for example https://goproxy.cn,direct).
         GOPROXY: ${GOPROXY:-}
         NPM_REGISTRY: ${NPM_REGISTRY:-}
+        # GitHub release host for the relocatable Python; override where
+        # github.com is unreachable. SKIP_PYTHON_STANDALONE=1 omits it entirely
+        # (sandbox images without python3 then need their own).
+        PYTHON_STANDALONE_BASE: ${PYTHON_STANDALONE_BASE:-}
+        SKIP_PYTHON_STANDALONE: ${SKIP_PYTHON_STANDALONE:-0}
     environment:
       AGENTFLOW_ISOLATED_IMAGE: loopforge-platform:local

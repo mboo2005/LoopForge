@@ -54,18 +54,29 @@ ARG TARGETARCH
 ARG PYTHON_STANDALONE=20261110/cpython-3.12.16+20261110
 ARG PYTHON_STANDALONE_SHA256_AMD64=6a9e62dad033790aef722dbd370e0ce76ce17b73627ba3ae679f537049350b39
 ARG PYTHON_STANDALONE_SHA256_ARM64=b6a41defec4975d94b4ff1950236e7383e5c02ba40ea48c9ec33c66087a35aab
-RUN case "${TARGETARCH:-amd64}" in \
-      amd64) arch=x86_64 sum="${PYTHON_STANDALONE_SHA256_AMD64}" ;; \
-      arm64) arch=aarch64 sum="${PYTHON_STANDALONE_SHA256_ARM64}" ;; \
-      *) echo "unsupported arch ${TARGETARCH}" >&2; exit 1 ;; \
-    esac \
- && curl -fsSL -o /tmp/python.tar.gz "https://github.com/astral-sh/python-build-standalone/releases/download/${PYTHON_STANDALONE}-${arch}-unknown-linux-gnu-install_only_stripped.tar.gz" \
- && echo "${sum}  /tmp/python.tar.gz" | sha256sum -c - \
- && mkdir -p /app \
- && tar -xzf /tmp/python.tar.gz -C /app \
- && rm -f /tmp/python.tar.gz \
- && rm -rf /app/python/share/terminfo \
- && /app/python/bin/python3 -c 'import json,urllib.request,ctypes'
+# Override the download host where github.com is unreachable (for example a
+# corporate GitHub release mirror). Keep the path after the host unchanged.
+ARG PYTHON_STANDALONE_BASE=https://github.com
+# Set to 1 to build without the relocatable Python. Only sandbox images that
+# ship no python3 need it; native workflows never use it.
+ARG SKIP_PYTHON_STANDALONE=0
+RUN if [ "${SKIP_PYTHON_STANDALONE}" = "1" ]; then \
+      echo "Skipping the relocatable Python (SKIP_PYTHON_STANDALONE=1)"; \
+    else \
+      case "${TARGETARCH:-amd64}" in \
+        amd64) arch=x86_64 sum="${PYTHON_STANDALONE_SHA256_AMD64}" ;; \
+        arm64) arch=aarch64 sum="${PYTHON_STANDALONE_SHA256_ARM64}" ;; \
+        *) echo "unsupported arch ${TARGETARCH}" >&2; exit 1 ;; \
+      esac; \
+      curl -fsSL --retry 5 --retry-delay 5 -o /tmp/python.tar.gz \
+        "${PYTHON_STANDALONE_BASE:-https://github.com}/astral-sh/python-build-standalone/releases/download/${PYTHON_STANDALONE}-${arch}-unknown-linux-gnu-install_only_stripped.tar.gz" \
+      && echo "${sum}  /tmp/python.tar.gz" | sha256sum -c - \
+      && mkdir -p /app \
+      && tar -xzf /tmp/python.tar.gz -C /app \
+      && rm -f /tmp/python.tar.gz \
+      && rm -rf /app/python/share/terminfo \
+      && /app/python/bin/python3 -c 'import json,urllib.request,ctypes'; \
+    fi
 COPY --from=docker:27-cli /usr/local/bin/docker /usr/local/bin/docker
 COPY --from=docker:27-cli /usr/local/libexec/docker/cli-plugins/docker-buildx /usr/local/libexec/docker/cli-plugins/docker-buildx
 WORKDIR /app
